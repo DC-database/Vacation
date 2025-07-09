@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hospital Leave Request System</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+</head>
+<body>
+  <div id="loading-animation">
+    <div class="loading-text">Loading Hospital Leave System...</div>
+  </div>
+
+  <div class="container" id="login-container" style="display:none;">
+    <h2>Hospital Staff Login</h2>
+    <div class="form-group">
+      <label for="employee-id">Employee ID:</label>
+      <input id="employee-id" type="text" placeholder="Enter your employee ID" />
+    </div>
+    <button onclick="verifyEmployee()">Login</button>
+    <div id="login-message" class="message"></div>
+    <div class="links">
+      <a href="#" onclick="showHrLogin()">HR Manager Login</a>
+    </div>
+  </div>
+
+  <div class="container" id="request-container" style="display:none;">
+    <h2>Leave Request Form</h2>
+    <div class="staff-info">
+      <p><strong>Employee:</strong> <span id="display-name"></span></p>
+      <p><strong>ID:</strong> <span id="display-id"></span></p>
+    </div>
+    
+    <div class="form-group">
+      <label for="leave-type">Leave Type:</label>
+      <select id="leave-type">
+        <option value="Vacation">Vacation Leave</option>
+        <option value="Sick">Sick Leave</option>
+        <option value="Emergency">Emergency Leave</option>
+        <option value="Maternity">Maternity Leave</option>
+        <option value="Paternity">Paternity Leave</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label for="start-date">Start Date:</label>
+      <input id="start-date" type="date" onchange="calculateEndDate()" />
+    </div>
+    
+    <div class="form-group">
+      <label for="total-days">Total Days:</label>
+      <input id="total-days" type="number" min="1" value="1" onchange="calculateEndDate()" />
+    </div>
+    
+    <div class="form-group">
+      <label for="end-date">End Date:</label>
+      <input id="end-date" type="date" readonly />
+    </div>
+    
+    <div class="form-group">
+      <label for="reason">Reason:</label>
+      <textarea id="reason" rows="3" placeholder="Brief reason for leave"></textarea>
+    </div>
+    
+    <div class="form-group">
+      <label for="email">Notification Email (optional):</label>
+      <input id="email" type="email" placeholder="Enter email for receipt" />
+    </div>
+    
+    <button onclick="submitRequest()">Submit Request</button>
+    <button onclick="showStatusPage()" class="status-btn">Check Status</button>
+    <button onclick="logout()" class="logout-btn">Logout</button>
+    
+    <div id="message" class="message"></div>
+  </div>
+
+  <div class="container" id="status-container" style="display:none;">
+    <h2>My Leave Requests</h2>
+    <div class="staff-info">
+      <p><strong>Employee:</strong> <span id="status-name"></span></p>
+      <p><strong>ID:</strong> <span id="status-id"></span></p>
+    </div>
+    <div id="requests-list"></div>
+    <button onclick="backToRequestForm()">Back to Request Form</button>
+    <button onclick="logout()" class="logout-btn">Logout</button>
+  </div>
+
+  <div class="container" id="hr-login-container" style="display:none;">
+    <h2>HR Manager Login</h2>
+    <div class="form-group">
+      <label for="hr-id">HR ID:</label>
+      <input id="hr-id" type="text" placeholder="Enter your HR ID" />
+    </div>
+    <div class="form-group">
+      <label for="hr-password">Password:</label>
+      <input id="hr-password" type="password" placeholder="Enter your password" />
+    </div>
+    <button onclick="verifyHr()">Login</button>
+    <button onclick="backToEmployeeLogin()">Back to Employee Login</button>
+    <div id="hr-login-message" class="message"></div>
+  </div>
+
+  <div class="container" id="hr-approval-container" style="display:none;">
+    <h2>Leave Requests Approval</h2>
+    <div class="hr-info">
+      <p><strong>HR Manager:</strong> <span id="hr-name"></span></p>
+      <p><strong>Pending Requests:</strong> <span id="pending-count">0</span></p>
+    </div>
+    
+    <div class="hr-tabs">
+      <button id="tab-pending" class="active" onclick="switchHrTab('pending')">Pending</button>
+      <button id="tab-history" onclick="switchHrTab('history')">Employee History</button>
+    </div>
+    
+    <div id="pending-section">
+      <div class="table-container">
+        <table id="pending-requests-table">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Leave Type</th>
+              <th>Start Date</th>
+              <th>End Date</th>
+              <th>Days</th>
+              <th>Reason</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pending-requests-body">
+            <tr><td colspan="7" class="loading">Loading requests...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div id="history-section" style="display:none;">
+      <div class="form-group">
+        <label for="history-employee-id">Employee ID:</label>
+        <input id="history-employee-id" type="text" placeholder="Enter employee ID" />
+        <button onclick="loadEmployeeHistory()">Search</button>
+      </div>
+      <div id="history-results">
+        <div id="employee-history-list"></div>
+      </div>
+    </div>
+    
+    <button onclick="hrLogout()" class="logout-btn">Logout</button>
+  </div>
+  
+  <script src="script.js"></script>
+  <script>
+    setTimeout(() => {
+      document.getElementById('loading-animation').style.display = 'none';
+      document.getElementById('login-container').style.display = 'block';
+    }, 1500);
+  </script>
+</body>
+</html>
