@@ -638,3 +638,107 @@ tr:hover {
 .minimize-btn:hover {
   background-color: #475569;
 }
+
+/* New Timeline Styles */
+.year-container {
+  margin-bottom: 30px;
+}
+
+.year-header {
+  color: #005b96;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #005b96;
+  margin-bottom: 20px;
+}
+
+.timeline {
+  position: relative;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px 0;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  background-color: #005b96;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  margin-left: -1px;
+}
+
+.timeline-entry {
+  padding: 10px 40px;
+  position: relative;
+  width: 50%;
+  box-sizing: border-box;
+}
+
+.timeline-entry::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border: 3px solid #005b96;
+  border-radius: 50%;
+  top: 15px;
+  z-index: 1;
+}
+
+.left {
+  left: 0;
+}
+
+.left::after {
+  right: -10px;
+}
+
+.right {
+  left: 50%;
+}
+
+.right::after {
+  left: -10px;
+}
+
+.timeline-content {
+  padding: 15px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  position: relative;
+}
+
+.timeline-month {
+  font-weight: bold;
+  color: #005b96;
+  margin-bottom: 5px;
+}
+
+.timeline-date {
+  color: #64748b;
+  font-size: 0.9em;
+}
+
+@media (max-width: 768px) {
+  .timeline::before {
+    left: 31px;
+  }
+  
+  .timeline-entry {
+    width: 100%;
+    padding-left: 70px;
+    padding-right: 25px;
+  }
+  
+  .timeline-entry::after {
+    left: 21px;
+  }
+  
+  .right {
+    left: 0;
+  }
+}

@@ -129,22 +129,6 @@ function submitRequest() {
   });
 }
 
-function showStatusPage() {
-  if (!currentEmployee) {
-    alert('Please login first');
-    return;
-  }
-
-  document.getElementById('request-container').style.display = 'none';
-  document.getElementById('status-container').style.display = 'block';
-  loadEmployeeRequests();
-}
-
-function backToRequestForm() {
-  document.getElementById('status-container').style.display = 'none';
-  document.getElementById('request-container').style.display = 'block';
-}
-
 function loadEmployeeRequests() {
   const requestsList = document.getElementById('requests-list');
   requestsList.innerHTML = '<p class="loading">Loading your requests...</p>';
@@ -161,22 +145,50 @@ function loadEmployeeRequests() {
       requestsList.innerHTML = '';
       
       if (data.requests && data.requests.length) {
-        data.requests.forEach(request => {
-          const requestItem = document.createElement('div');
-          requestItem.className = 'request-item';
-          const statusClass = request.status.toLowerCase();
-          
-          requestItem.innerHTML = `
-            <h3>${request.leaveType} Leave</h3>
-            <p><strong>Dates:</strong> ${request.startDate || ''} to ${request.endDate || ''}</p>
-            ${request.reason ? `<p><strong>Reason:</strong> ${request.reason}</p>` : ''}
-            <p><strong>Status:</strong> <span class="status ${statusClass}">${request.status || 'Pending'}</span></p>
-            ${request.remarks ? `<div class="remarks"><strong>Remarks:</strong> ${request.remarks}</div>` : ''}
-            ${request.status === 'Rejected' ? 
-              `<button onclick="resubmitRequest('${request.id}')">Resubmit</button>` : ''}
-          `;
-          requestsList.appendChild(requestItem);
+        // Filter for current year requests
+        const currentYear = new Date().getFullYear();
+        const currentYearRequests = data.requests.filter(request => {
+          if (!request.startDate) return false;
+          const requestYear = new Date(request.startDate).getFullYear();
+          return requestYear === currentYear;
         });
+        
+        const olderRequests = data.requests.filter(request => {
+          if (!request.startDate) return false;
+          const requestYear = new Date(request.startDate).getFullYear();
+          return requestYear < currentYear;
+        });
+
+        // Create current year section
+        if (currentYearRequests.length > 0) {
+          const currentYearHeader = document.createElement('h3');
+          currentYearHeader.textContent = `${currentYear} Requests`;
+          requestsList.appendChild(currentYearHeader);
+
+          currentYearRequests.forEach(request => {
+            requestsList.appendChild(createRequestItem(request));
+          });
+        } else {
+          requestsList.innerHTML += '<p>No leave requests for current year.</p>';
+        }
+
+        // Create older requests section if they exist
+        if (olderRequests.length > 0) {
+          const olderHeader = document.createElement('h3');
+          olderHeader.textContent = 'Older Requests';
+          requestsList.appendChild(olderHeader);
+
+          const showOlderBtn = document.createElement('button');
+          showOlderBtn.textContent = 'Show Older Requests';
+          showOlderBtn.style.margin = '10px 0';
+          showOlderBtn.onclick = () => {
+            olderRequests.forEach(request => {
+              requestsList.appendChild(createRequestItem(request));
+            });
+            showOlderBtn.style.display = 'none';
+          };
+          requestsList.appendChild(showOlderBtn);
+        }
       } else {
         requestsList.innerHTML = '<p>No leave requests found.</p>';
       }
@@ -188,6 +200,39 @@ function loadEmployeeRequests() {
     console.error('Error loading requests:', error);
     requestsList.innerHTML = `<p class="error">Error: ${error.message || 'Failed to load requests'}</p>`;
   });
+}
+
+function createRequestItem(request) {
+  const requestItem = document.createElement('div');
+  requestItem.className = 'request-item';
+  const statusClass = request.status.toLowerCase();
+  
+  requestItem.innerHTML = `
+    <h3>${request.leaveType} Leave</h3>
+    <p><strong>Dates:</strong> ${request.startDate || ''} to ${request.endDate || ''}</p>
+    ${request.reason ? `<p><strong>Reason:</strong> ${request.reason}</p>` : ''}
+    <p><strong>Status:</strong> <span class="status ${statusClass}">${request.status || 'Pending'}</span></p>
+    ${request.remarks ? `<div class="remarks"><strong>Remarks:</strong> ${request.remarks}</div>` : ''}
+    ${request.status === 'Rejected' ? 
+      `<button onclick="resubmitRequest('${request.id}')">Resubmit</button>` : ''}
+  `;
+  return requestItem;
+}
+
+function showStatusPage() {
+  if (!currentEmployee) {
+    alert('Please login first');
+    return;
+  }
+
+  document.getElementById('request-container').style.display = 'none';
+  document.getElementById('status-container').style.display = 'block';
+  loadEmployeeRequests();
+}
+
+function backToRequestForm() {
+  document.getElementById('status-container').style.display = 'none';
+  document.getElementById('request-container').style.display = 'block';
 }
 
 function resubmitRequest(requestId) {
@@ -550,18 +595,50 @@ function showVacationHistory(name, history) {
   if (history.length === 0) {
     content.innerHTML = '<p>No vacation history found</p>';
   } else {
+    // Group by year
+    const groupedByYear = {};
     history.forEach(item => {
-      const entry = document.createElement('div');
-      entry.className = 'history-entry';
-      entry.innerHTML = `
-        <div class="history-year">${item.year}</div>
-        <div class="history-details">
-          <div class="history-month">${item.month}</div>
-          <div class="history-date">${item.date}</div>
-        </div>
-      `;
-      content.appendChild(entry);
+      if (!groupedByYear[item.year]) {
+        groupedByYear[item.year] = [];
+      }
+      groupedByYear[item.year].push(item);
     });
+    
+    // Create timeline for each year
+    for (const year in groupedByYear) {
+      const yearContainer = document.createElement('div');
+      yearContainer.className = 'year-container';
+      
+      const yearHeader = document.createElement('h4');
+      yearHeader.className = 'year-header';
+      yearHeader.textContent = year;
+      yearContainer.appendChild(yearHeader);
+      
+      const timeline = document.createElement('div');
+      timeline.className = 'timeline';
+      
+      groupedByYear[year].forEach((item, index) => {
+        const entry = document.createElement('div');
+        entry.className = `timeline-entry ${index % 2 === 0 ? 'left' : 'right'}`;
+        
+        const dot = document.createElement('div');
+        dot.className = 'timeline-dot';
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'timeline-content';
+        contentDiv.innerHTML = `
+          <div class="timeline-month">${item.month}</div>
+          <div class="timeline-date">${item.date.split('-')[0]} ${item.date.split('-')[1]}</div>
+        `;
+        
+        entry.appendChild(dot);
+        entry.appendChild(contentDiv);
+        timeline.appendChild(entry);
+      });
+      
+      yearContainer.appendChild(timeline);
+      content.appendChild(yearContainer);
+    }
   }
   
   modal.classList.add('show');
