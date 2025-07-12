@@ -1,6 +1,34 @@
-const scriptURL = 'https://script.google.com/macros/s/AKfycbwXZfUQV8bDNcLvatpeqmq9dINnKUWP7l-8DdBE4Yggyjmsr2g1_A2m3v1HwmI5-CI8/exec';
+const scriptURL = 'https://script.google.com/macros/s/AKfycbwj2hg1s_ThPGspps52yaCdj-92X046OHNCHAO8SjcE0jlpA9J4WaBSFrSrLf2G4kkj/exec';
 let currentEmployee = null;
 let currentHr = null;
+
+function formatDisplayDate(dateString) {
+  if (!dateString || dateString === 'N/A') return 'N/A';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date)) return dateString;
+    
+    const months = [
+      'January', 'February', 'March', 'April', 
+      'May', 'June', 'July', 'August',
+      'September', 'October', 'November', 'December'
+    ];
+    
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    console.error('Error formatting date:', e);
+    return dateString;
+  }
+}
+
+function formatHrTableDate(dateString) {
+  return formatDisplayDate(dateString);
+}
 
 function calculateEndDate() {
   const startDate = document.getElementById('start-date').value;
@@ -19,13 +47,11 @@ function verifyEmployee() {
   const msgElement = document.getElementById('login-message');
   
   if (!employeeId) {
-    msgElement.style.color = 'red';
-    msgElement.innerText = 'Please enter your employee ID';
+    showError(msgElement, 'Please enter your employee ID');
     return;
   }
 
-  msgElement.style.color = '#005b96';
-  msgElement.innerText = 'Verifying...';
+  showLoading(msgElement, 'Verifying...');
 
   fetch(`${scriptURL}?action=verify&id=${encodeURIComponent(employeeId)}`, {
     method: 'POST',
@@ -49,8 +75,7 @@ function verifyEmployee() {
     }
   })
   .catch(error => {
-    msgElement.style.color = 'red';
-    msgElement.innerText = error.message || 'Error verifying employee ID';
+    showError(msgElement, error.message || 'Error verifying employee ID');
   });
 }
 
@@ -64,17 +89,14 @@ function submitRequest() {
   const startDate = document.getElementById('start-date').value;
   const endDate = document.getElementById('end-date').value;
   const reason = document.getElementById('reason').value;
-  const email = document.getElementById('email').value;
   const msgElement = document.getElementById('message');
 
   if (!startDate || !endDate) {
-    msgElement.style.color = 'red';
-    msgElement.innerText = 'Please select start date and enter total days';
+    showError(msgElement, 'Please select start date and enter total days');
     return;
   }
 
-  msgElement.style.color = '#005b96';
-  msgElement.innerText = 'Submitting request...';
+  showLoading(msgElement, 'Submitting request...');
 
   const params = new URLSearchParams();
   params.append('action', 'add');
@@ -84,7 +106,6 @@ function submitRequest() {
   params.append('startDate', startDate);
   params.append('endDate', endDate);
   params.append('reason', reason);
-  params.append('email', email);
 
   fetch(scriptURL, {
     method: 'POST',
@@ -93,20 +114,17 @@ function submitRequest() {
   .then(res => res.json())
   .then(data => {
     if (data.status === 'ok') {
-      msgElement.style.color = 'green';
-      msgElement.innerText = data.message;
+      showSuccess(msgElement, data.message);
       document.getElementById('start-date').value = '';
       document.getElementById('end-date').value = '';
       document.getElementById('total-days').value = '1';
       document.getElementById('reason').value = '';
-      document.getElementById('email').value = '';
     } else {
       throw new Error(data.message || 'Error submitting request');
     }
   })
   .catch(error => {
-    msgElement.style.color = 'red';
-    msgElement.innerText = error.message || 'Error submitting request';
+    showError(msgElement, error.message || 'Error submitting request');
   });
 }
 
@@ -128,7 +146,7 @@ function backToRequestForm() {
 
 function loadEmployeeRequests() {
   const requestsList = document.getElementById('requests-list');
-  requestsList.innerHTML = '<p>Loading your requests...</p>';
+  requestsList.innerHTML = '<p class="loading">Loading your requests...</p>';
 
   fetch(`${scriptURL}?action=getEmployeeRequests&id=${encodeURIComponent(currentEmployee.id)}`, {
     method: 'POST',
@@ -158,21 +176,8 @@ function loadEmployeeRequests() {
     }
   })
   .catch(error => {
-    requestsList.innerHTML = `<p>Error: ${error.message || 'Failed to load requests'}</p>`;
+    requestsList.innerHTML = `<p class="error">Error: ${error.message || 'Failed to load requests'}</p>`;
   });
-}
-
-function formatDisplayDate(dateString) {
-  if (!dateString) return '';
-  try {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = date.toLocaleString('default', { month: 'short' });
-    return `${year}-${day}-${month}`;
-  } catch (e) {
-    return dateString;
-  }
 }
 
 function resubmitRequest(requestId) {
@@ -241,6 +246,8 @@ function verifyHr() {
       document.getElementById('hr-login-container').style.display = 'none';
       document.getElementById('hr-approval-container').style.display = 'block';
       msgElement.innerText = '';
+      loadActiveStaff();
+      loadOnLeaveStaff();
       loadPendingRequests();
     } else {
       throw new Error(data.message || 'Invalid HR credentials');
@@ -251,47 +258,139 @@ function verifyHr() {
   });
 }
 
+function handleDashboardCardClick(section) {
+  const targetSection = document.getElementById(`${section}-section`);
+  const isHidden = targetSection.style.display === 'none';
+  targetSection.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {
+    targetSection.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+function loadActiveStaff() {
+  const activeBody = document.getElementById('active-staff-body');
+  if (!activeBody) {
+    console.error('Active staff body element not found');
+    return;
+  }
+  
+  activeBody.innerHTML = '<tr><td colspan="5" class="loading">Loading active staff...</td></tr>';
+
+  fetch(`${scriptURL}?action=getActiveStaff`, {
+    method: 'POST',
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Network response was not ok');
+    return res.json();
+  })
+  .then(data => {
+    if (data.status === 'ok') {
+      document.getElementById('active-count').textContent = data.staff.length;
+      document.getElementById('total-count').textContent = data.totalEmployees;
+      document.getElementById('onleave-count').textContent = data.onLeaveCount;
+
+      activeBody.innerHTML = '';
+      
+      if (data.staff?.length) {
+        data.staff.forEach(employee => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${employee.id}</td>
+            <td>${employee.name}</td>
+            <td>${employee.hasPending || employee.hasApproved ? 'Yes' : 'No'}</td>
+            <td>${employee.hasPending || employee.hasApproved ? employee.month : ''}</td>
+            <td>${employee.hasPending ? 'Pending' : employee.hasApproved ? 'Approved' : ''}</td>
+          `;
+          activeBody.appendChild(row);
+        });
+      } else {
+        activeBody.innerHTML = '<tr><td colspan="5">No active staff found</td></tr>';
+      }
+    } else {
+      throw new Error(data.message || 'Error loading active staff');
+    }
+  })
+  .catch(error => {
+    console.error('Error loading active staff:', error);
+    activeBody.innerHTML = `<tr><td colspan="5" class="error">Error: ${error.message || 'Failed to load active staff'}</td></tr>`;
+  });
+}
+
+function loadOnLeaveStaff() {
+  const onLeaveBody = document.getElementById('onleave-staff-body');
+  onLeaveBody.innerHTML = '<tr><td colspan="4" class="loading">Loading staff on leave...</td></tr>';
+
+  fetch(`${scriptURL}?action=getOnLeaveStaff`, {
+    method: 'POST',
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.status === 'ok') {
+      document.getElementById('onleave-count').textContent = data.staff?.length || 0;
+      onLeaveBody.innerHTML = '';
+      
+      if (data.staff?.length) {
+        data.staff.forEach(employee => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${employee.name}<br><small>ID: ${employee.id}</small></td>
+            <td>${employee.leaveType}</td>
+            <td class="date-display">${formatHrTableDate(employee.startDate)}</td>
+            <td class="date-display">${formatHrTableDate(employee.endDate)}</td>
+          `;
+          onLeaveBody.appendChild(row);
+        });
+      } else {
+        onLeaveBody.innerHTML = '<tr><td colspan="4">No staff currently on leave</td></tr>';
+      }
+    } else {
+      throw new Error(data.message || 'Error loading staff on leave');
+    }
+  })
+  .catch(error => {
+    onLeaveBody.innerHTML = `<tr><td colspan="4" class="error">Error: ${error.message || 'Load failed'}</td></tr>`;
+  });
+}
+
 function loadPendingRequests() {
   const pendingBody = document.getElementById('pending-requests-body');
-  pendingBody.innerHTML = '<tr><td colspan="7" class="loading">Loading requests...</td></tr>';
+  pendingBody.innerHTML = '<tr><td colspan="6" class="loading">Loading requests...</td></tr>';
 
   fetch(`${scriptURL}?action=getPendingRequests`, {
     method: 'POST',
   })
   .then(res => res.json())
   .then(data => {
-    if (data.status === 'ok' && data.requests?.length) {
-      document.getElementById('pending-count').textContent = data.requests.length;
+    if (data.status === 'ok') {
+      document.getElementById('pending-count').textContent = data.requests?.length || 0;
       pendingBody.innerHTML = '';
       
-      data.requests.forEach(request => {
-        const start = new Date(request.startDate);
-        const end = new Date(request.endDate);
-        const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${request.employeeName}<br><small>ID: ${request.employeeId}</small></td>
-          <td>${request.leaveType}</td>
-          <td class="date-display">${formatDisplayDate(request.startDate)}</td>
-          <td class="date-display">${formatDisplayDate(request.endDate)}</td>
-          <td>${diffDays}</td>
-          <td>${request.reason || '-'}</td>
-          <td class="action-buttons">
-            <textarea id="remarks-${request.id}" placeholder="HR remarks"></textarea>
-            <button onclick="approveRequest('${request.id}')" class="approve-btn">Approve</button>
-            <button onclick="rejectRequest('${request.id}')" class="reject-btn">Reject</button>
-          </td>
-        `;
-        pendingBody.appendChild(row);
-      });
+      if (data.requests?.length) {
+        data.requests.forEach(request => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${request.employeeName}<br><small>ID: ${request.employeeId}</small></td>
+            <td>${request.leaveType}</td>
+            <td class="date-display">${formatHrTableDate(request.startDate)}</td>
+            <td class="date-display">${formatHrTableDate(request.endDate)}</td>
+            <td>${request.reason || '-'}</td>
+            <td class="action-buttons">
+              <textarea id="remarks-${request.id}" placeholder="HR remarks"></textarea>
+              <button onclick="approveRequest('${request.id}')" class="approve-btn">Approve</button>
+              <button onclick="rejectRequest('${request.id}')" class="reject-btn">Reject</button>
+            </td>
+          `;
+          pendingBody.appendChild(row);
+        });
+      } else {
+        pendingBody.innerHTML = '<tr><td colspan="6">No pending requests</td></tr>';
+      }
     } else {
-      pendingBody.innerHTML = '<tr><td colspan="7">No pending requests</td></tr>';
-      document.getElementById('pending-count').textContent = '0';
+      throw new Error(data.message || 'Error loading pending requests');
     }
   })
   .catch(error => {
-    pendingBody.innerHTML = `<tr><td colspan="7">Error: ${error.message || 'Load failed'}</td></tr>`;
+    pendingBody.innerHTML = `<tr><td colspan="6" class="error">Error: ${error.message || 'Load failed'}</td></tr>`;
   });
 }
 
@@ -319,83 +418,13 @@ function updateRequestStatus(requestId, status, remarks) {
   .then(data => {
     if (data.status === 'ok') {
       loadPendingRequests();
+      loadOnLeaveStaff();
     } else {
       throw new Error(data.message || 'Error updating request status');
     }
   })
   .catch(error => {
     alert(error.message || 'Error updating request status');
-  });
-}
-
-function switchHrTab(tabName) {
-  document.getElementById('tab-pending').classList.remove('active');
-  document.getElementById('tab-history').classList.remove('active');
-  document.getElementById('pending-section').style.display = 'none';
-  document.getElementById('history-section').style.display = 'none';
-  
-  document.getElementById(`tab-${tabName}`).classList.add('active');
-  document.getElementById(`${tabName}-section`).style.display = 'block';
-  
-  if (tabName === 'pending') {
-    loadPendingRequests();
-  }
-}
-
-function loadEmployeeHistory() {
-  const employeeId = document.getElementById('history-employee-id').value.trim();
-  const historyList = document.getElementById('employee-history-list');
-  
-  if (!employeeId) {
-    alert('Please enter an employee ID');
-    return;
-  }
-  
-  historyList.innerHTML = '<p>Loading employee history...</p>';
-  
-  fetch(`${scriptURL}?action=getEmployeeHistory&id=${encodeURIComponent(employeeId)}`, {
-    method: 'POST',
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.status === 'ok' && data.history?.length) {
-      historyList.innerHTML = '';
-      
-      const groupedByYear = {};
-      data.history.forEach(request => {
-        const year = new Date(request.timestamp).getFullYear();
-        if (!groupedByYear[year]) {
-          groupedByYear[year] = [];
-        }
-        groupedByYear[year].push(request);
-      });
-      
-      for (const year in groupedByYear) {
-        const yearHeader = document.createElement('h3');
-        yearHeader.textContent = year;
-        historyList.appendChild(yearHeader);
-        
-        groupedByYear[year].forEach(request => {
-          const historyItem = document.createElement('div');
-          historyItem.className = 'history-item';
-          const statusClass = request.status.toLowerCase();
-          
-          historyItem.innerHTML = `
-            <p><strong>Type:</strong> ${request.leaveType}</p>
-            <p><strong>Dates:</strong> ${formatDisplayDate(request.startDate)} to ${formatDisplayDate(request.endDate)}</p>
-            <p><strong>Status:</strong> <span class="status ${statusClass}">${request.status}</span></p>
-            <p><strong>Requested:</strong> ${formatDisplayDate(request.timestamp)}</p>
-            ${request.remarks ? `<div class="remarks"><strong>Remarks:</strong> ${request.remarks}</div>` : ''}
-          `;
-          historyList.appendChild(historyItem);
-        });
-      }
-    } else {
-      historyList.innerHTML = '<p>No history found for this employee.</p>';
-    }
-  })
-  .catch(error => {
-    historyList.innerHTML = `<p>Error: ${error.message || 'Failed to load history'}</p>`;
   });
 }
 
@@ -422,7 +451,41 @@ function showError(element, message) {
   element.innerText = message;
 }
 
+function showSuccess(element, message) {
+  element.style.color = 'green';
+  element.innerText = message;
+}
+
 function showLoading(element, message) {
   element.style.color = '#005b96';
   element.innerText = message;
 }
+
+function setupMobileMenu() {
+  const menuBtn = document.createElement('div');
+  menuBtn.id = 'mobile-menu-btn';
+  menuBtn.innerHTML = '☰';
+  document.body.prepend(menuBtn);
+  
+  menuBtn.addEventListener('click', () => {
+    const nav = document.querySelector('.hr-tabs');
+    if (nav) {
+      nav.style.display = nav.style.display === 'flex' ? 'none' : 'flex';
+    }
+  });
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.innerWidth < 768) {
+    setupMobileMenu();
+  }
+  
+  document.querySelectorAll('.dashboard-card').forEach(card => {
+    card.addEventListener('click', function() {
+      const target = this.getAttribute('data-target');
+      if (target) {
+        handleDashboardCardClick(target);
+      }
+    });
+  });
+});

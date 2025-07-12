@@ -1,0 +1,496 @@
+const SHEET_EMPLOYEES = 'Employees';
+const SHEET_REQUESTS = 'Requests';
+const SHEET_HR = 'HR';
+
+function formatDateForDisplay(dateValue) {
+  if (!dateValue) return '';
+  
+  const months = [
+    'January', 'February', 'March', 'April', 
+    'May', 'June', 'July', 'August',
+    'September', 'October', 'November', 'December'
+  ];
+  
+  try {
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (isNaN(date)) return dateValue;
+    
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    console.error('Error formatting date:', e, dateValue);
+    return dateValue;
+  }
+}
+
+function doGet(e) {
+  return handleRequest(e || {});
+}
+
+function doPost(e) {
+  return handleRequest(e || {});
+}
+
+function handleRequest(e) {
+  try {
+    e = e || {};
+    e.parameter = e.parameter || {};
+    const action = e.parameter.action;
+
+    if (!action) return createErrorResponse('No action specified');
+
+    switch (action) {
+      case 'verify': return verifyEmployee(e);
+      case 'verifyHr': return verifyHr(e);
+      case 'add': return addLeaveRequest(e);
+      case 'getEmployeeRequests': return getEmployeeRequests(e);
+      case 'getPendingRequests': return getPendingRequests(e);
+      case 'getEmployeeHistory': return getEmployeeHistory(e);
+      case 'updateRequestStatus': return updateRequestStatus(e);
+      case 'resubmitRequest': return resubmitRequest(e);
+      case 'getActiveStaff': return getActiveStaff();
+      case 'getOnLeaveStaff': return getOnLeaveStaff();
+      default: return createErrorResponse('Unknown action');
+    }
+  } catch (error) {
+    console.error('Error in handleRequest:', error);
+    return createErrorResponse('Server error: ' + error.message);
+  }
+}
+
+function verifyEmployee(e) {
+  const employeeId = e.parameter.id;
+  if (!employeeId) return createErrorResponse('Employee ID required');
+
+  const employeeSheet = getSheet(SHEET_EMPLOYEES);
+  const data = employeeSheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[0] && row[0].toString() === employeeId.toString()) {
+      return createSuccessResponse({
+        status: 'verified',
+        name: row[1] || '',
+        message: 'Employee verified'
+      });
+    }
+  }
+
+  return createErrorResponse('Employee ID not found');
+}
+
+function verifyHr(e) {
+  const hrId = e.parameter.id;
+  const password = e.parameter.password;
+  if (!hrId || !password) return createErrorResponse('HR ID and password required');
+
+  const hrSheet = getSheet(SHEET_HR);
+  const data = hrSheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[0] && row[0].toString() === hrId && row[1] && row[1].toString() === password) {
+      return createSuccessResponse({
+        status: 'verified',
+        name: row[2] || 'HR Manager',
+        message: 'HR verified'
+      });
+    }
+  }
+
+  return createErrorResponse('Invalid HR credentials');
+}
+
+function addLeaveRequest(e) {
+  const employeeId = e.parameter.id;
+  const employeeName = e.parameter.name;
+  const leaveType = e.parameter.leaveType;
+  const startDate = e.parameter.startDate;
+  const endDate = e.parameter.endDate;
+  const reason = e.parameter.reason;
+  const email = e.parameter.email;
+
+  if (!employeeId || !startDate || !endDate) {
+    return createErrorResponse('Missing required fields');
+  }
+
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  const data = requestSheet.getDataRange().getValues();
+
+  // Check for overlapping requests
+  const currentStart = new Date(startDate);
+  const currentEnd = new Date(endDate);
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[1] && row[1].toString() === employeeId.toString() && row[7] !== 'Rejected') {
+      const existingStart = new Date(row[4]);
+      const existingEnd = new Date(row[5]);
+
+      if ((currentStart >= existingStart && currentStart <= existingEnd) ||
+          (currentEnd >= existingStart && currentEnd <= existingEnd) ||
+          (currentStart <= existingStart && currentEnd >= existingEnd)) {
+        return createErrorResponse('You already have a leave request during this period');
+      }
+    }
+  }
+
+  // Check monthly limit (3 requests per month)
+  const month = currentStart.getMonth();
+  const year = currentStart.getFullYear();
+  let monthlyCount = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const rowDate = new Date(row[4]);
+    const rowMonth = rowDate.getMonth();
+    const rowYear = rowDate.getFullYear();
+    
+    if (rowMonth === month && rowYear === year) {
+      monthlyCount++;
+    }
+  }
+
+  if (monthlyCount >= 3) {
+    return createErrorResponse(`Maximum of 3 leave requests allowed per month (${getMonthName(month)} ${year} already has ${monthlyCount} requests)`);
+  }
+
+  // If all checks pass, create the request
+  const id = new Date().getTime();
+  const timestamp = new Date().toLocaleString();
+
+  requestSheet.appendRow([
+    id, employeeId, employeeName, leaveType,
+    startDate, endDate, reason, 'Pending',
+    timestamp, '', email || ''
+  ]);
+
+  if (email && isValidEmail(email)) {
+    const subject = `Leave Request Receipt - ${employeeName}`;
+    const body = `
+Dear ${employeeName},
+
+Your leave request has been submitted:
+
+- Type: ${leaveType}
+- Dates: ${formatDateForDisplay(startDate)} to ${formatDateForDisplay(endDate)}
+- Reason: ${reason || 'N/A'}
+- Status: Pending
+
+Note: Only 3 leave requests allowed per month.
+
+Regards,
+Hospital HR
+    `;
+    MailApp.sendEmail(email, subject, body);
+  }
+
+  return createSuccessResponse({
+    status: 'ok',
+    message: 'Request submitted' + (email ? ' - Receipt sent' : '')
+  });
+}
+
+function getEmployeeRequests(e) {
+  const employeeId = e.parameter.id;
+  if (!employeeId) return createErrorResponse('Employee ID required');
+
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  const data = requestSheet.getDataRange().getValues();
+  const requests = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[1] && row[1].toString() === employeeId.toString()) {
+      requests.push({
+        id: row[0],
+        leaveType: row[3],
+        startDate: formatDateForDisplay(row[4]),
+        endDate: formatDateForDisplay(row[5]),
+        reason: row[6],
+        status: row[7],
+        remarks: row[9] || '',
+        timestamp: formatDateForDisplay(row[8] || '')
+      });
+    }
+  }
+
+  return createSuccessResponse({ status: 'ok', requests });
+}
+
+function getEmployeeHistory(e) {
+  const employeeId = e.parameter.id;
+  if (!employeeId) return createErrorResponse('Employee ID required');
+
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  const data = requestSheet.getDataRange().getValues();
+  const history = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[1] && row[1].toString() === employeeId.toString()) {
+      history.push({
+        id: row[0],
+        leaveType: row[3],
+        startDate: formatDateForDisplay(row[4]),
+        endDate: formatDateForDisplay(row[5]),
+        reason: row[6],
+        status: row[7],
+        remarks: row[9] || '',
+        timestamp: formatDateForDisplay(row[8] || '')
+      });
+    }
+  }
+
+  history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  return createSuccessResponse({ status: 'ok', history });
+}
+
+function getPendingRequests() {
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  const data = requestSheet.getDataRange().getValues();
+  const requests = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[7] === 'Pending') {
+      requests.push({
+        id: row[0],
+        employeeId: row[1],
+        employeeName: row[2],
+        leaveType: row[3],
+        startDate: row[4] ? new Date(row[4]).toISOString().split('T')[0] : '',
+        endDate: row[5] ? new Date(row[5]).toISOString().split('T')[0] : '',
+        reason: row[6]
+      });
+    }
+  }
+
+  return createSuccessResponse({ status: 'ok', requests });
+}
+
+function getActiveStaff() {
+  const employeeSheet = getSheet(SHEET_EMPLOYEES);
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  
+  // Get all employees
+  const employeeData = employeeSheet.getDataRange().getValues();
+  const allEmployees = [];
+  
+  for (let i = 1; i < employeeData.length; i++) {
+    const row = employeeData[i];
+    if (row[0] && row[1]) {
+      allEmployees.push({
+        id: row[0],
+        name: row[1]
+      });
+    }
+  }
+  
+  // Get all requests for additional details
+  const requestData = requestSheet.getDataRange().getValues();
+  const employeesOnLeave = new Set();
+  const employeeStatus = {};
+  const employeeLeaveMonths = {}; // Track leave months per employee
+  
+  for (let i = 1; i < requestData.length; i++) {
+    const row = requestData[i];
+    const employeeId = row[1];
+    const startDate = new Date(row[4]);
+    const monthName = getMonthName(startDate.getMonth()); // Get month from leave request
+    
+    // Check if employee has any pending requests
+    if (row[7] === 'Pending') {
+      if (!employeeStatus[employeeId]) {
+        employeeStatus[employeeId] = { hasPending: true, hasApproved: false };
+      } else {
+        employeeStatus[employeeId].hasPending = true;
+      }
+      employeeLeaveMonths[employeeId] = monthName; // Store requested month
+    }
+    
+    // Check if employee has any approved requests
+    if (row[7] === 'Approved') {
+      if (!employeeStatus[employeeId]) {
+        employeeStatus[employeeId] = { hasPending: false, hasApproved: true };
+      } else {
+        employeeStatus[employeeId].hasApproved = true;
+      }
+      employeeLeaveMonths[employeeId] = monthName; // Store requested month
+    }
+    
+    // Check for current leave status
+    if (row[7] === 'Approved') {
+      const endDate = new Date(row[5]);
+      const now = new Date();
+      
+      if (startDate <= now && endDate >= now) {
+        employeesOnLeave.add(employeeId);
+      }
+    }
+  }
+  
+  // Filter out employees who are on approved leave
+  const activeStaff = allEmployees.filter(employee => !employeesOnLeave.has(employee.id));
+  
+  // Add status information to each employee
+  activeStaff.forEach(employee => {
+    const status = employeeStatus[employee.id] || { hasPending: false, hasApproved: false };
+    employee.hasPending = status.hasPending;
+    employee.hasApproved = status.hasApproved;
+    employee.month = employeeLeaveMonths[employee.id] || ''; // Use requested month or empty
+  });
+  
+  return createSuccessResponse({ 
+    status: 'ok', 
+    staff: activeStaff,
+    totalEmployees: allEmployees.length,
+    onLeaveCount: employeesOnLeave.size
+  });
+}
+
+function getOnLeaveStaff() {
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  const employeeSheet = getSheet(SHEET_EMPLOYEES);
+  const now = new Date();
+  
+  // Get all employees for name lookup
+  const employeeData = employeeSheet.getDataRange().getValues();
+  const employeeMap = {};
+  for (let i = 1; i < employeeData.length; i++) {
+    const row = employeeData[i];
+    if (row[0] && row[1]) {
+      employeeMap[row[0]] = row[1];
+    }
+  }
+  
+  // Get all approved requests that include current date
+  const requestData = requestSheet.getDataRange().getValues();
+  const onLeaveStaff = [];
+  
+  for (let i = 1; i < requestData.length; i++) {
+    const row = requestData[i];
+    if (row[7] === 'Approved') {
+      const startDate = new Date(row[4]);
+      const endDate = new Date(row[5]);
+      
+      if (startDate <= now && endDate >= now) {
+        onLeaveStaff.push({
+          id: row[1],
+          name: employeeMap[row[1]] || row[2],
+          leaveType: row[3],
+          startDate: row[4],
+          endDate: row[5]
+        });
+      }
+    }
+  }
+  
+  return createSuccessResponse({ 
+    status: 'ok', 
+    staff: onLeaveStaff 
+  });
+}
+
+function updateRequestStatus(e) {
+  const requestId = e.parameter.id;
+  const status = e.parameter.status;
+  const remarks = e.parameter.remarks;
+  const hrId = e.parameter.hrId;
+
+  if (!requestId || !status || !hrId) {
+    return createErrorResponse('Missing required fields');
+  }
+
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  const data = requestSheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[0] && row[0].toString() === requestId.toString()) {
+      requestSheet.getRange(i + 1, 8).setValue(status);
+      requestSheet.getRange(i + 1, 10).setValue(remarks || '');
+      
+      if (status === 'Approved' || status === 'Rejected') {
+        const employeeEmail = row[10] || '';
+        if (employeeEmail && isValidEmail(employeeEmail)) {
+          const subject = `Leave Request ${status} - ${row[2]}`;
+          const body = `
+Dear ${row[2]},
+
+Your leave request has been ${status.toLowerCase()}:
+
+- Type: ${row[3]}
+- Dates: ${formatDateForDisplay(row[4])} to ${formatDateForDisplay(row[5])}
+- Reason: ${row[6] || 'N/A'}
+- Status: ${status}
+- Remarks: ${remarks || 'N/A'}
+
+Regards,
+Hospital HR
+          `;
+          MailApp.sendEmail(employeeEmail, subject, body);
+        }
+      }
+      
+      return createSuccessResponse({ status: 'ok', message: 'Status updated' });
+    }
+  }
+
+  return createErrorResponse('Request not found');
+}
+
+function resubmitRequest(e) {
+  const requestId = e.parameter.id;
+  const employeeId = e.parameter.employeeId;
+
+  if (!requestId || !employeeId) {
+    return createErrorResponse('Missing required fields');
+  }
+
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  const data = requestSheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[0].toString() === requestId && row[1].toString() === employeeId) {
+      requestSheet.getRange(i + 1, 8).setValue('Pending');
+      requestSheet.getRange(i + 1, 10).setValue('');
+      return createSuccessResponse({ status: 'ok', message: 'Resubmitted successfully' });
+    }
+  }
+
+  return createErrorResponse('Request not found');
+}
+
+function getSheet(sheetName) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) throw new Error(`Sheet ${sheetName} not found`);
+  return sheet;
+}
+
+function getMonthName(monthIndex) {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  return months[monthIndex];
+}
+
+function isValidEmail(email) {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+}
+
+function createSuccessResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function createErrorResponse(message) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'error',
+    message: message
+  })).setMimeType(ContentService.MimeType.JSON);
+}

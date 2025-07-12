@@ -1,9 +1,10 @@
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #e6f2ff;
+  background: linear-gradient(135deg, #e6f2ff, #cce5ff);
   margin: 0;
   padding: 0;
   color: #333;
+  min-height: 100vh;
 }
 
 #loading-animation {
@@ -12,14 +13,56 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: #005b96;
+  background: #ffffff;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  color: white;
-  font-size: 24px;
+  color: #005b96;
+}
+
+.loading-logo {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.hospital-icon {
+  font-size: 4rem;
+  margin-bottom: 15px;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.loading-text {
+  font-size: 1.8rem;
   font-weight: bold;
+  color: #005b96;
+}
+
+.loading-bar {
+  width: 200px;
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loading-progress {
+  height: 100%;
+  width: 0;
+  background: #005b96;
+  animation: loading 1.5s ease-in-out forwards;
+}
+
+@keyframes loading {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.8; }
 }
 
 .container {
@@ -27,16 +70,119 @@ body {
   margin: 30px auto;
   padding: 30px;
   background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  border: 1px solid #cce5ff;
 }
 
 h2 {
   color: #005b96;
   text-align: center;
   margin-bottom: 25px;
-  border-bottom: 2px solid #005b96;
   padding-bottom: 10px;
+  position: relative;
+}
+
+h2:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 3px;
+  background: #005b96;
+}
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+.dashboard-card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.dashboard-card h3 {
+  margin: 0 0 10px 0;
+  font-size: 1rem;
+  color: #555;
+}
+
+.card-value {
+  font-size: 2.2rem;
+  font-weight: bold;
+}
+
+.active-card {
+  border-top: 4px solid #4CAF50;
+}
+
+.total-card {
+  border-top: 4px solid #2196F3;
+}
+
+.leave-card {
+  border-top: 4px solid #FF9800;
+}
+
+.pending-card {
+  border-top: 4px solid #9C27B0;
+}
+
+.dashboard-sections {
+  display: grid;
+  gap: 30px;
+}
+
+.dashboard-section {
+  display: block;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  margin-bottom: 15px;
+  transition: all 0.3s ease;
+}
+
+.minimize-btn {
+  background-color: #666;
+  width: 30px !important;
+  padding: 5px !important;
+  min-width: auto;
+}
+
+.section-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.section-controls h3 {
+  margin: 0;
+}
+
+.date-display {
+  font-family: inherit;
+  white-space: nowrap;
+  font-size: 0.9em;
+  color: #444;
 }
 
 .form-group {
@@ -62,6 +208,7 @@ input, select, textarea {
 
 textarea {
   resize: vertical;
+  min-height: 80px;
 }
 
 button {
@@ -76,12 +223,13 @@ button {
   margin: 10px 5px;
   cursor: pointer;
   border-radius: 4px;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
   width: 48%;
 }
 
 button:hover {
   background-color: #003d66;
+  transform: translateY(-2px);
 }
 
 .logout-btn {
@@ -145,6 +293,7 @@ button:hover {
   margin-bottom: 15px;
   border-radius: 4px;
   background-color: #f9f9f9;
+  animation: slideUp 0.5s ease;
 }
 
 .request-item h3 {
@@ -184,29 +333,29 @@ button:hover {
   margin-top: 20px;
 }
 
-#pending-requests-table {
+table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 15px;
 }
 
-#pending-requests-table th {
+th {
   background-color: #005b96;
   color: white;
   padding: 12px 15px;
   text-align: left;
 }
 
-#pending-requests-table td {
+td {
   padding: 10px 15px;
   border-bottom: 1px solid #ddd;
 }
 
-#pending-requests-table tr:nth-child(even) {
+tr:nth-child(even) {
   background-color: #f8f9fa;
 }
 
-#pending-requests-table tr:hover {
+tr:hover {
   background-color: #f1f7fd;
 }
 
@@ -242,93 +391,84 @@ button:hover {
   font-style: italic;
 }
 
-.hr-tabs {
-  display: flex;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #ddd;
-}
-
-.hr-tabs button {
-  width: auto;
-  padding: 10px 20px;
-  margin: 0 5px 0 0;
-  border-radius: 4px 4px 0 0;
-  background-color: #ddd;
-  color: #333;
-}
-
-.hr-tabs button.active {
-  background-color: #005b96;
-  color: white;
-}
-
-.history-item {
-  border: 1px solid #ddd;
-  padding: 15px;
-  margin-bottom: 15px;
-  border-radius: 4px;
-  background-color: #f9f9f9;
-}
-
-.history-item h3 {
-  margin-top: 0;
-  color: #005b96;
-}
-
-.history-item p {
-  margin: 5px 0;
-}
-
-.history-item .status {
-  font-weight: bold;
-}
-
-.history-item .status.pending {
-  color: #FFA500;
-}
-
-.history-item .status.approved {
-  color: #009900;
-}
-
-.history-item .status.rejected {
+.error {
   color: #cc0000;
 }
 
-.date-display {
-  font-family: monospace;
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 @media (max-width: 768px) {
   .container {
     padding: 15px;
     margin: 15px;
+    border-radius: 8px;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
   }
   
   button {
+    padding: 14px;
+    font-size: 18px;
     width: 100%;
-    margin: 5px 0;
+    margin: 8px 0;
+  }
+  
+  .dashboard-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .dashboard-sections {
+    grid-template-columns: 1fr;
   }
   
   .action-buttons {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
   }
   
   .action-buttons button {
-    width: calc(50% - 5px);
+    width: 100%;
   }
   
-  .action-buttons textarea {
-    min-height: 80px;
-  }
-  
-  #pending-requests-table {
+  table {
     font-size: 14px;
   }
   
-  #pending-requests-table th, 
-  #pending-requests-table td {
-    padding: 8px 10px;
+  th, td {
+    padding: 10px 8px;
+  }
+  
+  input, select, textarea {
+    font-size: 16px;
+  }
+  
+  .hospital-icon {
+    font-size: 3rem;
+  }
+  
+  .loading-text {
+    font-size: 1.5rem;
+  }
+  
+  .dashboard-card h3 {
+    font-size: 0.9rem;
+  }
+  
+  .card-value {
+    font-size: 1.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .card-value {
+    font-size: 1.8rem;
   }
 }

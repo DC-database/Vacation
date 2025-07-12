@@ -1,13 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hospital Leave Request System</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
 </head>
 <body>
   <div id="loading-animation">
-    <div class="loading-text">Loading Hospital Leave System...</div>
+    <div class="loading-logo">
+      <div class="hospital-icon">🏥</div>
+      <div class="loading-text">Hospital Staff Portal</div>
+    </div>
+    <div class="loading-bar">
+      <div class="loading-progress"></div>
+    </div>
   </div>
 
   <div class="container" id="login-container" style="display:none;">
@@ -29,7 +37,6 @@
       <p><strong>Employee:</strong> <span id="display-name"></span></p>
       <p><strong>ID:</strong> <span id="display-id"></span></p>
     </div>
-    
     <div class="form-group">
       <label for="leave-type">Leave Type:</label>
       <select id="leave-type">
@@ -40,36 +47,25 @@
         <option value="Paternity">Paternity Leave</option>
       </select>
     </div>
-    
     <div class="form-group">
       <label for="start-date">Start Date:</label>
       <input id="start-date" type="date" onchange="calculateEndDate()" />
     </div>
-    
     <div class="form-group">
       <label for="total-days">Total Days:</label>
       <input id="total-days" type="number" min="1" value="1" onchange="calculateEndDate()" />
     </div>
-    
     <div class="form-group">
       <label for="end-date">End Date:</label>
       <input id="end-date" type="date" readonly />
     </div>
-    
     <div class="form-group">
       <label for="reason">Reason:</label>
       <textarea id="reason" rows="3" placeholder="Brief reason for leave"></textarea>
     </div>
-    
-    <div class="form-group">
-      <label for="email">Notification Email (optional):</label>
-      <input id="email" type="email" placeholder="Enter email for receipt" />
-    </div>
-    
     <button onclick="submitRequest()">Submit Request</button>
     <button onclick="showStatusPage()" class="status-btn">Check Status</button>
     <button onclick="logout()" class="logout-btn">Logout</button>
-    
     <div id="message" class="message"></div>
   </div>
 
@@ -100,57 +96,102 @@
   </div>
 
   <div class="container" id="hr-approval-container" style="display:none;">
-    <h2>Leave Requests Approval</h2>
+    <h2>Staff Management Dashboard</h2>
     <div class="hr-info">
       <p><strong>HR Manager:</strong> <span id="hr-name"></span></p>
-      <p><strong>Pending Requests:</strong> <span id="pending-count">0</span></p>
     </div>
     
-    <div class="hr-tabs">
-      <button id="tab-pending" class="active" onclick="switchHrTab('pending')">Pending</button>
-      <button id="tab-history" onclick="switchHrTab('history')">Employee History</button>
-    </div>
-    
-    <div id="pending-section">
-      <div class="table-container">
-        <table id="pending-requests-table">
-          <thead>
-            <tr>
-              <th>Employee</th>
-              <th>Leave Type</th>
-              <th>Start Date</th>
-              <th>End Date</th>
-              <th>Days</th>
-              <th>Reason</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="pending-requests-body">
-            <tr><td colspan="7" class="loading">Loading requests...</td></tr>
-          </tbody>
-        </table>
+    <div class="dashboard-cards">
+      <div class="dashboard-card active-card" data-target="active">
+        <h3>Active Staff</h3>
+        <div class="card-value" id="active-count">0</div>
+      </div>
+      <div class="dashboard-card total-card">
+        <h3>Total Employees</h3>
+        <div class="card-value" id="total-count">0</div>
+      </div>
+      <div class="dashboard-card leave-card" data-target="onleave">
+        <h3>On Leave</h3>
+        <div class="card-value" id="onleave-count">0</div>
+      </div>
+      <div class="dashboard-card pending-card" data-target="pending">
+        <h3>Pending</h3>
+        <div class="card-value" id="pending-count">0</div>
       </div>
     </div>
     
-    <div id="history-section" style="display:none;">
-      <div class="form-group">
-        <label for="history-employee-id">Employee ID:</label>
-        <input id="history-employee-id" type="text" placeholder="Enter employee ID" />
-        <button onclick="loadEmployeeHistory()">Search</button>
+    <div class="dashboard-sections">
+      <div class="dashboard-section" id="active-section">
+        <div class="section-controls">
+          <h3>Active Staff</h3>
+          <button onclick="handleDashboardCardClick('active')" class="minimize-btn">-</button>
+        </div>
+        <div class="table-container">
+          <table id="active-staff-table">
+            <thead>
+              <tr>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Has Application</th>
+                <th>Month</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="active-staff-body">
+              <tr><td colspan="5" class="loading">Loading active staff...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div id="history-results">
-        <div id="employee-history-list"></div>
+      
+      <div class="dashboard-section" id="onleave-section">
+        <div class="section-controls">
+          <h3>Staff On Leave</h3>
+          <button onclick="handleDashboardCardClick('onleave')" class="minimize-btn">-</button>
+        </div>
+        <div class="table-container">
+          <table id="onleave-staff-table">
+            <thead>
+              <tr>
+                <th>Employee</th><th>Leave Type</th><th>Start Date</th><th>Return Date</th>
+              </tr>
+            </thead>
+            <tbody id="onleave-staff-body">
+              <tr><td colspan="4" class="loading">Loading staff on leave...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <div class="dashboard-section" id="pending-section">
+        <div class="section-controls">
+          <h3>Pending Approvals</h3>
+          <button onclick="handleDashboardCardClick('pending')" class="minimize-btn">-</button>
+        </div>
+        <div class="table-container">
+          <table id="pending-requests-table">
+            <thead>
+              <tr>
+                <th>Employee</th><th>Leave Type</th><th>Start Date</th><th>Return Date</th><th>Reason</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="pending-requests-body">
+              <tr><td colspan="6" class="loading">Loading requests...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     
     <button onclick="hrLogout()" class="logout-btn">Logout</button>
   </div>
-  
+
   <script src="script.js"></script>
   <script>
     setTimeout(() => {
       document.getElementById('loading-animation').style.display = 'none';
       document.getElementById('login-container').style.display = 'block';
+      document.getElementById('login-container').classList.add('animate__fadeIn');
     }, 1500);
   </script>
 </body>
