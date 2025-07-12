@@ -1,4 +1,4 @@
-const scriptURL = 'https://script.google.com/macros/s/AKfycbziJy7Izu8yyHp1OIy1fZUeNuaVWrDzgtIBoeVaVU3J_egDRiL7Ppskip2SjMz81t83/exec';
+const scriptURL = 'https://script.google.com/macros/s/AKfycbz20CvHXDkyiBSrSqokSzT9aDgespBoxIcVPVA2H7_PGyMdVV-gQebeL7mSc54jju0t/exec';
 let currentEmployee = null;
 let currentHr = null;
 
@@ -119,6 +119,7 @@ function submitRequest() {
       document.getElementById('end-date').value = '';
       document.getElementById('total-days').value = '1';
       document.getElementById('reason').value = '';
+      toggleRequestForm();
     } else {
       throw new Error(data.message || 'Error submitting request');
     }
@@ -167,8 +168,8 @@ function loadEmployeeRequests() {
           
           requestItem.innerHTML = `
             <h3>${request.leaveType} Leave</h3>
-            <p><strong>Dates:</strong> ${request.startDate || 'N/A'} to ${request.endDate || 'N/A'}</p>
-            <p><strong>Reason:</strong> ${request.reason || 'N/A'}</p>
+            <p><strong>Dates:</strong> ${request.startDate || ''} to ${request.endDate || ''}</p>
+            ${request.reason ? `<p><strong>Reason:</strong> ${request.reason}</p>` : ''}
             <p><strong>Status:</strong> <span class="status ${statusClass}">${request.status || 'Pending'}</span></p>
             ${request.remarks ? `<div class="remarks"><strong>Remarks:</strong> ${request.remarks}</div>` : ''}
             ${request.status === 'Rejected' ? 
@@ -301,13 +302,17 @@ function loadActiveStaff() {
       activeBody.innerHTML = '';
       
       if (data.staff?.length) {
+        const currentYear = new Date().getFullYear();
+        
         data.staff.forEach(employee => {
+          // Only show applications from current year
+          const hasCurrentYearApp = employee.hasPending || employee.hasApproved;
           const row = document.createElement('tr');
           row.innerHTML = `
             <td>${employee.id}</td>
-            <td>${employee.name}</td>
-            <td>${employee.hasPending || employee.hasApproved ? 'Yes' : 'No'}</td>
-            <td>${employee.hasPending || employee.hasApproved ? employee.month : ''}</td>
+            <td><a class="history-link" onclick="showStaffVacationHistory('${employee.id}', '${employee.name}')">${employee.name}</a></td>
+            <td>${hasCurrentYearApp ? 'Yes' : 'No'}</td>
+            <td>${hasCurrentYearApp ? employee.month : ''}</td>
             <td>${employee.hasPending ? 'Pending' : employee.hasApproved ? 'Approved' : ''}</td>
           `;
           activeBody.appendChild(row);
@@ -342,7 +347,7 @@ function loadOnLeaveStaff() {
         data.staff.forEach(employee => {
           const row = document.createElement('tr');
           row.innerHTML = `
-            <td>${employee.name}<br><small>ID: ${employee.id}</small></td>
+            <td><a class="history-link" onclick="showStaffVacationHistory('${employee.id}', '${employee.name}')">${employee.name}</a><br><small>ID: ${employee.id}</small></td>
             <td>${employee.leaveType}</td>
             <td class="date-display">${formatHrTableDate(employee.startDate)}</td>
             <td class="date-display">${formatHrTableDate(employee.endDate)}</td>
@@ -428,6 +433,7 @@ function updateRequestStatus(requestId, status, remarks) {
     if (data.status === 'ok') {
       loadPendingRequests();
       loadOnLeaveStaff();
+      loadActiveStaff();
     } else {
       throw new Error(data.message || 'Error updating request status');
     }
@@ -483,6 +489,94 @@ function setupMobileMenu() {
     }
   });
 }
+
+function toggleRequestForm() {
+  const formContainer = document.getElementById('request-form-container');
+  const toggleBtn = document.getElementById('toggle-form-btn');
+  
+  if (formContainer.style.display === 'none') {
+    formContainer.style.display = 'block';
+    toggleBtn.textContent = 'Hide Form';
+  } else {
+    formContainer.style.display = 'none';
+    toggleBtn.textContent = 'Apply for Leave';
+  }
+}
+
+function showMyVacationHistory() {
+  if (!currentEmployee) return;
+  
+  fetch(`${scriptURL}?action=getVacationHistory&id=${encodeURIComponent(currentEmployee.id)}`, {
+    method: 'POST',
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.status === 'ok') {
+      showVacationHistory(currentEmployee.name, data.history);
+    } else {
+      throw new Error(data.message || 'Error loading vacation history');
+    }
+  })
+  .catch(error => {
+    alert(error.message || 'Error loading vacation history');
+  });
+}
+
+function showStaffVacationHistory(employeeId, employeeName) {
+  fetch(`${scriptURL}?action=getVacationHistory&id=${encodeURIComponent(employeeId)}`, {
+    method: 'POST',
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.status === 'ok') {
+      showVacationHistory(employeeName, data.history);
+    } else {
+      throw new Error(data.message || 'Error loading vacation history');
+    }
+  })
+  .catch(error => {
+    alert(error.message || 'Error loading vacation history');
+  });
+}
+
+function showVacationHistory(name, history) {
+  const modal = document.getElementById('vacation-history-modal');
+  const title = document.getElementById('history-title');
+  const content = document.getElementById('vacation-history-content');
+  
+  title.textContent = `${name}'s Vacation History`;
+  content.innerHTML = '';
+  
+  if (history.length === 0) {
+    content.innerHTML = '<p>No vacation history found</p>';
+  } else {
+    history.forEach(item => {
+      const entry = document.createElement('div');
+      entry.className = 'history-entry';
+      entry.innerHTML = `
+        <div class="history-year">${item.year}</div>
+        <div class="history-details">
+          <div class="history-month">${item.month}</div>
+          <div class="history-date">${item.date}</div>
+        </div>
+      `;
+      content.appendChild(entry);
+    });
+  }
+  
+  modal.classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('vacation-history-modal').classList.remove('show');
+}
+
+window.onclick = function(event) {
+  const modal = document.getElementById('vacation-history-modal');
+  if (event.target === modal) {
+    closeModal();
+  }
+};
 
 window.addEventListener('DOMContentLoaded', () => {
   if (window.innerWidth < 768) {

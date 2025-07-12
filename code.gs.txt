@@ -40,6 +40,7 @@ function handleRequest(e) {
       case 'resubmitRequest': return resubmitRequest(e);
       case 'getActiveStaff': return getActiveStaff();
       case 'getOnLeaveStaff': return getOnLeaveStaff();
+      case 'getVacationHistory': return getVacationHistory(e);
       default: return createErrorResponse('Unknown action');
     }
   } catch (error) {
@@ -193,7 +194,7 @@ function getEmployeeRequests(e) {
 
   return createSuccessResponse({ 
     status: 'ok', 
-    requests: requests.reverse() // Show most recent first
+    requests: requests.reverse()
   });
 }
 
@@ -269,11 +270,17 @@ function getActiveStaff() {
   const employeesOnLeave = new Set();
   const employeeStatus = {};
   const employeeLeaveMonths = {};
+  const currentYear = new Date().getFullYear();
   
   for (let i = 1; i < requestData.length; i++) {
     const row = requestData[i];
     const employeeId = row[1];
     const startDate = new Date(row[4]);
+    const requestYear = startDate.getFullYear();
+    
+    // Only consider requests from current year
+    if (requestYear !== currentYear) continue;
+    
     const monthName = getMonthName(startDate.getMonth());
     
     if (row[7] === 'Pending') {
@@ -322,6 +329,7 @@ function getOnLeaveStaff() {
   const requestSheet = getSheet(SHEET_REQUESTS);
   const employeeSheet = getSheet(SHEET_EMPLOYEES);
   const now = new Date();
+  const currentYear = now.getFullYear();
   
   const employeeData = employeeSheet.getDataRange().getValues();
   const employeeMap = {};
@@ -340,6 +348,9 @@ function getOnLeaveStaff() {
     if (row[7] === 'Approved') {
       const startDate = new Date(row[4]);
       const endDate = new Date(row[5]);
+      
+      // Only show current year's leave
+      if (startDate.getFullYear() !== currentYear) continue;
       
       if (startDate <= now && endDate >= now) {
         onLeaveStaff.push({
@@ -415,6 +426,33 @@ function resubmitRequest(e) {
   }
 
   return createErrorResponse('Request not found');
+}
+
+function getVacationHistory(e) {
+  const employeeId = e.parameter.id;
+  if (!employeeId) return createErrorResponse('Employee ID required');
+
+  const requestSheet = getSheet(SHEET_REQUESTS);
+  const data = requestSheet.getDataRange().getValues();
+  const history = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[1] && row[1].toString() === employeeId.toString() && 
+        row[7] === 'Approved' && row[3] === 'Vacation') {
+      const startDate = new Date(row[4]);
+      history.push({
+        year: startDate.getFullYear(),
+        month: getMonthName(startDate.getMonth()),
+        date: formatDateForDisplay(row[4])
+      });
+    }
+  }
+
+  // Sort by year descending
+  history.sort((a, b) => b.year - a.year);
+  
+  return createSuccessResponse({ status: 'ok', history });
 }
 
 function getSheet(sheetName) {
