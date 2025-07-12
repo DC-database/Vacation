@@ -4,26 +4,13 @@ const SHEET_HR = 'HR';
 
 function formatDateForDisplay(dateValue) {
   if (!dateValue) return '';
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (isNaN(date)) return 'Invalid Date';
   
-  const months = [
-    'January', 'February', 'March', 'April', 
-    'May', 'June', 'July', 'August',
-    'September', 'October', 'November', 'December'
-  ];
-  
-  try {
-    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
-    if (isNaN(date)) return dateValue;
-    
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    
-    return `${day}-${month}-${year}`;
-  } catch (e) {
-    console.error('Error formatting date:', e, dateValue);
-    return dateValue;
-  }
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                 'July', 'August', 'September', 'October', 'November', 'December'];
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${day}-${months[date.getMonth()]}-${date.getFullYear()}`;
 }
 
 function doGet(e) {
@@ -160,7 +147,7 @@ function addLeaveRequest(e) {
 
   // If all checks pass, create the request
   const id = new Date().getTime();
-  const timestamp = new Date().toLocaleString();
+  const timestamp = new Date().toISOString();
 
   requestSheet.appendRow([
     id, employeeId, employeeName, leaveType,
@@ -170,21 +157,7 @@ function addLeaveRequest(e) {
 
   if (email && isValidEmail(email)) {
     const subject = `Leave Request Receipt - ${employeeName}`;
-    const body = `
-Dear ${employeeName},
-
-Your leave request has been submitted:
-
-- Type: ${leaveType}
-- Dates: ${formatDateForDisplay(startDate)} to ${formatDateForDisplay(endDate)}
-- Reason: ${reason || 'N/A'}
-- Status: Pending
-
-Note: Only 3 leave requests allowed per month.
-
-Regards,
-Hospital HR
-    `;
+    const body = `Dear ${employeeName},\n\nYour leave request has been submitted:\n\nType: ${leaveType}\nDates: ${formatDateForDisplay(startDate)} to ${formatDateForDisplay(endDate)}\nReason: ${reason || 'N/A'}\nStatus: Pending\n\nNote: Only 3 leave requests allowed per month.\n\nRegards,\nHospital HR`;
     MailApp.sendEmail(email, subject, body);
   }
 
@@ -208,17 +181,20 @@ function getEmployeeRequests(e) {
       requests.push({
         id: row[0],
         leaveType: row[3],
-        startDate: formatDateForDisplay(row[4]),
-        endDate: formatDateForDisplay(row[5]),
-        reason: row[6],
-        status: row[7],
+        startDate: row[4] ? formatDateForDisplay(row[4]) : '',
+        endDate: row[5] ? formatDateForDisplay(row[5]) : '',
+        reason: row[6] || '',
+        status: row[7] || '',
         remarks: row[9] || '',
-        timestamp: formatDateForDisplay(row[8] || '')
+        timestamp: row[8] ? formatDateForDisplay(row[8]) : ''
       });
     }
   }
 
-  return createSuccessResponse({ status: 'ok', requests });
+  return createSuccessResponse({ 
+    status: 'ok', 
+    requests: requests.reverse() // Show most recent first
+  });
 }
 
 function getEmployeeHistory(e) {
@@ -235,12 +211,12 @@ function getEmployeeHistory(e) {
       history.push({
         id: row[0],
         leaveType: row[3],
-        startDate: formatDateForDisplay(row[4]),
-        endDate: formatDateForDisplay(row[5]),
+        startDate: row[4] ? new Date(row[4]).toISOString() : '',
+        endDate: row[5] ? new Date(row[5]).toISOString() : '',
         reason: row[6],
         status: row[7],
         remarks: row[9] || '',
-        timestamp: formatDateForDisplay(row[8] || '')
+        timestamp: row[8] ? new Date(row[8]).toISOString() : ''
       });
     }
   }
@@ -262,8 +238,8 @@ function getPendingRequests() {
         employeeId: row[1],
         employeeName: row[2],
         leaveType: row[3],
-        startDate: row[4] ? new Date(row[4]).toISOString().split('T')[0] : '',
-        endDate: row[5] ? new Date(row[5]).toISOString().split('T')[0] : '',
+        startDate: row[4] ? new Date(row[4]).toISOString() : '',
+        endDate: row[5] ? new Date(row[5]).toISOString() : '',
         reason: row[6]
       });
     }
@@ -276,7 +252,6 @@ function getActiveStaff() {
   const employeeSheet = getSheet(SHEET_EMPLOYEES);
   const requestSheet = getSheet(SHEET_REQUESTS);
   
-  // Get all employees
   const employeeData = employeeSheet.getDataRange().getValues();
   const allEmployees = [];
   
@@ -290,58 +265,49 @@ function getActiveStaff() {
     }
   }
   
-  // Get all requests for additional details
   const requestData = requestSheet.getDataRange().getValues();
   const employeesOnLeave = new Set();
   const employeeStatus = {};
-  const employeeLeaveMonths = {}; // Track leave months per employee
+  const employeeLeaveMonths = {};
   
   for (let i = 1; i < requestData.length; i++) {
     const row = requestData[i];
     const employeeId = row[1];
     const startDate = new Date(row[4]);
-    const monthName = getMonthName(startDate.getMonth()); // Get month from leave request
+    const monthName = getMonthName(startDate.getMonth());
     
-    // Check if employee has any pending requests
     if (row[7] === 'Pending') {
       if (!employeeStatus[employeeId]) {
         employeeStatus[employeeId] = { hasPending: true, hasApproved: false };
       } else {
         employeeStatus[employeeId].hasPending = true;
       }
-      employeeLeaveMonths[employeeId] = monthName; // Store requested month
+      employeeLeaveMonths[employeeId] = monthName;
     }
     
-    // Check if employee has any approved requests
     if (row[7] === 'Approved') {
       if (!employeeStatus[employeeId]) {
         employeeStatus[employeeId] = { hasPending: false, hasApproved: true };
       } else {
         employeeStatus[employeeId].hasApproved = true;
       }
-      employeeLeaveMonths[employeeId] = monthName; // Store requested month
-    }
-    
-    // Check for current leave status
-    if (row[7] === 'Approved') {
+      employeeLeaveMonths[employeeId] = monthName;
+      
       const endDate = new Date(row[5]);
       const now = new Date();
-      
       if (startDate <= now && endDate >= now) {
         employeesOnLeave.add(employeeId);
       }
     }
   }
   
-  // Filter out employees who are on approved leave
   const activeStaff = allEmployees.filter(employee => !employeesOnLeave.has(employee.id));
   
-  // Add status information to each employee
   activeStaff.forEach(employee => {
     const status = employeeStatus[employee.id] || { hasPending: false, hasApproved: false };
     employee.hasPending = status.hasPending;
     employee.hasApproved = status.hasApproved;
-    employee.month = employeeLeaveMonths[employee.id] || ''; // Use requested month or empty
+    employee.month = employeeLeaveMonths[employee.id] || '';
   });
   
   return createSuccessResponse({ 
@@ -357,7 +323,6 @@ function getOnLeaveStaff() {
   const employeeSheet = getSheet(SHEET_EMPLOYEES);
   const now = new Date();
   
-  // Get all employees for name lookup
   const employeeData = employeeSheet.getDataRange().getValues();
   const employeeMap = {};
   for (let i = 1; i < employeeData.length; i++) {
@@ -367,7 +332,6 @@ function getOnLeaveStaff() {
     }
   }
   
-  // Get all approved requests that include current date
   const requestData = requestSheet.getDataRange().getValues();
   const onLeaveStaff = [];
   
@@ -418,20 +382,7 @@ function updateRequestStatus(e) {
         const employeeEmail = row[10] || '';
         if (employeeEmail && isValidEmail(employeeEmail)) {
           const subject = `Leave Request ${status} - ${row[2]}`;
-          const body = `
-Dear ${row[2]},
-
-Your leave request has been ${status.toLowerCase()}:
-
-- Type: ${row[3]}
-- Dates: ${formatDateForDisplay(row[4])} to ${formatDateForDisplay(row[5])}
-- Reason: ${row[6] || 'N/A'}
-- Status: ${status}
-- Remarks: ${remarks || 'N/A'}
-
-Regards,
-Hospital HR
-          `;
+          const body = `Dear ${row[2]},\n\nYour leave request has been ${status.toLowerCase()}:\n\nType: ${row[3]}\nDates: ${formatDateForDisplay(row[4])} to ${formatDateForDisplay(row[5])}\nReason: ${row[6] || 'N/A'}\nStatus: ${status}\nRemarks: ${remarks || 'N/A'}\n\nRegards,\nHospital HR`;
           MailApp.sendEmail(employeeEmail, subject, body);
         }
       }

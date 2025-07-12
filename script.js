@@ -1,4 +1,4 @@
-const scriptURL = 'https://script.google.com/macros/s/AKfycbwj2hg1s_ThPGspps52yaCdj-92X046OHNCHAO8SjcE0jlpA9J4WaBSFrSrLf2G4kkj/exec';
+const scriptURL = 'https://script.google.com/macros/s/AKfycbziJy7Izu8yyHp1OIy1fZUeNuaVWrDzgtIBoeVaVU3J_egDRiL7Ppskip2SjMz81t83/exec';
 let currentEmployee = null;
 let currentHr = null;
 
@@ -7,7 +7,7 @@ function formatDisplayDate(dateString) {
   
   try {
     const date = new Date(dateString);
-    if (isNaN(date)) return dateString;
+    if (isNaN(date.getTime())) return 'Invalid Date';
     
     const months = [
       'January', 'February', 'March', 'April', 
@@ -22,7 +22,7 @@ function formatDisplayDate(dateString) {
     return `${day}-${month}-${year}`;
   } catch (e) {
     console.error('Error formatting date:', e);
-    return dateString;
+    return 'Invalid Date';
   }
 }
 
@@ -151,31 +151,40 @@ function loadEmployeeRequests() {
   fetch(`${scriptURL}?action=getEmployeeRequests&id=${encodeURIComponent(currentEmployee.id)}`, {
     method: 'POST',
   })
-  .then(res => res.json())
+  .then(res => {
+    if (!res.ok) throw new Error('Network response was not ok');
+    return res.json();
+  })
   .then(data => {
-    if (data.status === 'ok' && data.requests?.length) {
+    if (data.status === 'ok') {
       requestsList.innerHTML = '';
-      data.requests.forEach(request => {
-        const requestItem = document.createElement('div');
-        requestItem.className = 'request-item';
-        const statusClass = request.status.toLowerCase();
-        
-        requestItem.innerHTML = `
-          <h3>${request.leaveType} Leave</h3>
-          <p><strong>Dates:</strong> ${formatDisplayDate(request.startDate)} to ${formatDisplayDate(request.endDate)}</p>
-          <p><strong>Reason:</strong> ${request.reason}</p>
-          <p><strong>Status:</strong> <span class="status ${statusClass}">${request.status}</span></p>
-          ${request.remarks ? `<div class="remarks"><strong>Remarks:</strong> ${request.remarks}</div>` : ''}
-          ${request.status === 'Rejected' ? 
-            `<button onclick="resubmitRequest('${request.id}')">Resubmit</button>` : ''}
-        `;
-        requestsList.appendChild(requestItem);
-      });
+      
+      if (data.requests && data.requests.length) {
+        data.requests.forEach(request => {
+          const requestItem = document.createElement('div');
+          requestItem.className = 'request-item';
+          const statusClass = request.status.toLowerCase();
+          
+          requestItem.innerHTML = `
+            <h3>${request.leaveType} Leave</h3>
+            <p><strong>Dates:</strong> ${request.startDate || 'N/A'} to ${request.endDate || 'N/A'}</p>
+            <p><strong>Reason:</strong> ${request.reason || 'N/A'}</p>
+            <p><strong>Status:</strong> <span class="status ${statusClass}">${request.status || 'Pending'}</span></p>
+            ${request.remarks ? `<div class="remarks"><strong>Remarks:</strong> ${request.remarks}</div>` : ''}
+            ${request.status === 'Rejected' ? 
+              `<button onclick="resubmitRequest('${request.id}')">Resubmit</button>` : ''}
+          `;
+          requestsList.appendChild(requestItem);
+        });
+      } else {
+        requestsList.innerHTML = '<p>No leave requests found.</p>';
+      }
     } else {
-      requestsList.innerHTML = '<p>No leave requests found.</p>';
+      throw new Error(data.message || 'Error loading requests');
     }
   })
   .catch(error => {
+    console.error('Error loading requests:', error);
     requestsList.innerHTML = `<p class="error">Error: ${error.message || 'Failed to load requests'}</p>`;
   });
 }
